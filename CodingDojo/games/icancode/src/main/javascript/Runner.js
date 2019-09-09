@@ -1,6 +1,6 @@
 /*-
  * #%L
- * iCanCode - it's a dojo-like platform from developers to developers.
+ * Codenjoy - it's a dojo-like platform from developers to developers.
  * %%
  * Copyright (C) 2018 Codenjoy
  * %%
@@ -19,11 +19,305 @@
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
-/**
- * Created by Mikhail_Udalyi on 08.08.2016.
- */
 
-// ========================== board ==========================
+var util = require('util');
+var WSocket = require('ws');
+
+var log = function(string) {
+    console.log(string);
+    if (!!printBoardOnTextArea) {
+        printLogOnTextArea(string);
+    }
+};
+
+var printArray = function (array) {
+   var result = [];
+   for (var index in array) {
+       var element = array[index];
+       result.push(element.toString());
+   }
+   return "[" + result + "]";
+};
+
+var processBoard = function(boardString) {
+    var boardJson = eval(boardString);
+    var board = new Board(boardJson);
+    if (!!printBoardOnTextArea) {
+        printBoardOnTextArea(board.toString());
+    }
+
+    var logMessage = board + "\n\n";
+    var answer = new DirectionSolver(board).get().toString();
+    logMessage += "Answer: " + answer + "\n";
+    logMessage += "-----------------------------------\n";
+    
+    log(logMessage);
+
+    return answer;
+};
+
+// you can get this code after registration on the server with your email
+var url = "http://codenjoy.com/codenjoy-contest/board/player/5q0uczbju6no468bg6w0?code=1725193577353578184&gameName=icancode";
+
+url = url.replace("http", "ws");
+url = url.replace("board/player/", "ws?user=");
+url = url.replace("?code=", "&code=");
+
+var ws;
+
+function connect() {
+    ws = new WSocket(url);
+    log('Opening...');
+
+    ws.on('open', function() {
+        log('Web socket client opened ' + url);
+    });
+
+    ws.on('close', function() {
+        log('Web socket client closed');
+
+        setTimeout(function() {
+            connect();
+        }, 5000);
+    });
+
+    ws.on('message', function(message) {
+        var answer = processBoard(message);
+        ws.send(answer);
+    });
+}
+
+connect();
+
+var elements = [];
+var elementsTypes = [];
+var elementsByChar = {};
+var elementsByType = {};
+
+var el = function(char, type, direction) {
+    var result = {
+        char: char,
+        type: type,
+        direction: direction
+    };
+
+    elementsByChar[char] = result;
+
+    if (!elementsByType[type]) {
+        elementsByType[type] = [];
+    }
+
+    elementsByType[type].push(result);
+    elements.push(result);
+
+    if (elementsTypes.indexOf(type) == -1) {
+        elementsTypes.push(type);
+    }
+
+    return result;
+}
+
+var D = function(index, dx, dy, name){
+
+    var changeX = function(x) {
+        return x + dx;
+    };
+
+    var changeY = function(y) {
+        return y - dy;
+    };
+
+    var inverted = function() {
+        switch (this) {
+            case Direction.UP : return Direction.DOWN;
+            case Direction.DOWN : return Direction.UP;
+            case Direction.LEFT : return Direction.RIGHT;
+            case Direction.RIGHT : return Direction.LEFT;
+            default : return Direction.STOP;
+        }
+    };
+
+    var toString = function() {
+        return name;
+    };
+
+    return {
+        changeX : changeX,
+
+        changeY : changeY,
+
+        inverted : inverted,
+
+        toString : toString,
+
+        getIndex : function() {
+            return index;
+        }
+    };
+};
+
+var Direction = {
+    UP   : D(2, 0, 1, 'up'),                // you can move
+    DOWN : D(3, 0, -1, 'down'),
+    LEFT : D(0, -1, 0, 'left'),
+    RIGHT : D(1, 1, 0, 'right'),
+    JUMP : D(4, 0, 0, 'act(1)'),            // jump
+    PULL : D(5, 0, 0, 'act(2)'),            // pull box
+    FIRE : D(6, 0, 0, 'act(3)'),            // fire
+    DIE  : D(7, 0, 0, 'act(0)'),            // die
+    STOP : D(8, 0, 0, '')                   // stay
+};
+
+Direction.values = function() {
+   return [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT, Direction.JUMP, Direction.PULL, Direction.FIRE, Direction.DIE, Direction.STOP];
+};
+
+Direction.valueOf = function(index) {
+    var directions = Direction.values();
+    for (var i in directions) {
+        var direction = directions[i];
+        if (direction.getIndex() == index) {
+             return direction;
+        }
+    }
+    return Direction.STOP;
+};
+
+var Element = {
+    EMPTY: el('-', 'NONE'),
+    FLOOR: el('.', 'NONE'),
+
+    ANGLE_IN_LEFT: el('╔', 'WALL'),
+    WALL_FRONT: el('═', 'WALL'),
+    ANGLE_IN_RIGHT: el('┐', 'WALL'),
+    WALL_RIGHT: el('│', 'WALL'),
+    ANGLE_BACK_RIGHT: el('┘', 'WALL'),
+    WALL_BACK: el('─', 'WALL'),
+    ANGLE_BACK_LEFT: el('└', 'WALL'),
+    WALL_LEFT: el('║', 'WALL'),
+    WALL_BACK_ANGLE_LEFT: el('┌', 'WALL'),
+    WALL_BACK_ANGLE_RIGHT: el('╗', 'WALL'),
+    ANGLE_OUT_RIGHT: el('╝', 'WALL'),
+    ANGLE_OUT_LEFT: el('╚', 'WALL'),
+    SPACE: el(' ', 'WALL'),
+
+    LASER_MACHINE_CHARGING_LEFT: el('˂', 'LASER_MACHINE', Direction.LEFT),
+    LASER_MACHINE_CHARGING_RIGHT: el('˃', 'LASER_MACHINE', Direction.RIGHT),
+    LASER_MACHINE_CHARGING_UP: el('˄', 'LASER_MACHINE', Direction.UP),
+    LASER_MACHINE_CHARGING_DOWN: el('˅', 'LASER_MACHINE', Direction.DOWN),
+
+    LASER_MACHINE_READY_LEFT: el('◄', 'LASER_MACHINE_READY', Direction.LEFT),
+    LASER_MACHINE_READY_RIGHT: el('►', 'LASER_MACHINE_READY', Direction.RIGHT),
+    LASER_MACHINE_READY_UP: el('▲', 'LASER_MACHINE_READY', Direction.UP),
+    LASER_MACHINE_READY_DOWN: el('▼', 'LASER_MACHINE_READY', Direction.DOWN),
+
+    START: el('S', 'START'),
+    EXIT: el('E', 'EXIT'),
+    HOLE: el('O', 'HOLE'),
+    BOX: el('B', 'BOX'),
+    ZOMBIE_START: el('Z', 'ZOMBIE_START'),
+    GOLD: el('$', 'GOLD'),
+
+    ROBOT: el('☺', 'MY_ROBOT'),
+    ROBOT_FALLING: el('o', 'MY_ROBOT'),
+    ROBOT_FLYING: el('*', 'MY_ROBOT'),
+    ROBOT_LASER: el('☻', 'MY_ROBOT'),
+
+    ROBOT_OTHER: el('X', 'OTHER_ROBOT'),
+    ROBOT_OTHER_FALLING: el('x', 'OTHER_ROBOT'),
+    ROBOT_OTHER_FLYING: el('^', 'OTHER_ROBOT'),
+    ROBOT_OTHER_LASER: el('&', 'OTHER_ROBOT'),
+
+    LASER_LEFT: el('←', 'LASER_LEFT', Direction.LEFT),
+    LASER_RIGHT: el('→', 'LASER_RIGHT', Direction.RIGHT),
+    LASER_UP: el('↑', 'LASER_UP', Direction.UP),
+    LASER_DOWN: el('↓', 'LASER_DOWN', Direction.DOWN),
+
+    FEMALE_ZOMBIE: el('♀', 'ZOMBIE'),
+    MALE_ZOMBIE: el('♂', 'ZOMBIE'),
+    ZOMBIE_DIE: el('✝', 'ZOMBIE_DIE'),
+
+    getElements: function () {
+        return elements.slice(0);
+    },
+
+    getElement: function (char) {
+        var el = elementsByChar[char];
+        if (!el) {
+            throw "Element not found for: " + char;
+        }
+        return el;
+    },
+
+    getElementsTypes: function () {
+        var elements = [];
+        elementsTypes.forEach(function(e) {
+            if (Array.isArray(e)) {
+                elements = elements.concat(e);
+            } else {
+                elements.push(e);
+            }
+        });
+
+        var result = [];
+        elements.forEach(function(e) {
+            if (result.indexOf(e) < 0) {
+                result.push(e);
+            }
+        });
+
+        return result;
+    },
+
+    getElementsOfType: function (type) {
+        return elementsByType[type];
+    },
+
+    isWall: function(element) {
+        return element.type == 'WALL';
+    }
+};
+
+var Point = function (x, y, direction) {
+    return {
+        x: x,
+        y: y,
+        direction: direction,
+
+        equals: function (o) {
+            return o.getX() == x && o.getY() == y;
+        },
+
+        toString: function () {
+            return '[' + x + ',' + y + (!!direction ? (',' + direction) : '') + ']';
+        },
+
+        isBad: function (boardSize) {
+            return x >= boardSize || y >= boardSize || x < 0 || y < 0;
+        },
+
+        getX: function () {
+            return x;
+        },
+
+        getY: function () {
+            return y;
+        },
+
+        move: function (dx, dy) {
+            x += dx;
+            y += dy;
+        }
+    }
+};
+
+var pt = function (x, y) {
+    return new Point(x, y);
+};
+
+var LAYER1 = 0;
+var LAYER2 = 1;
+var LAYER3 = 2;
 
 var LengthToXY = function (boardSize) {
     var inversion = function (y) {
@@ -44,12 +338,7 @@ var LengthToXY = function (boardSize) {
     };
 };
 
-var LAYER1 = 0;
-var LAYER2 = 1;
-var LAYER3 = 2;
-
-var Board = function (boardString) {
-    var board = eval(boardString);
+var Board = function (board) {    
     var layersString = board.layers;
     var scannerOffset = board.offset;
     var heroPosition = board.heroPosition;
@@ -216,7 +505,7 @@ var Board = function (boardString) {
         return findAll(Element.BOX, LAYER2);
     };
 
-    var getStart = function () {
+    var getStarts = function () {
         return findAll(Element.START, LAYER1);
     };
 
@@ -224,7 +513,7 @@ var Board = function (boardString) {
         return findAll(Element.ZOMBIE_START, LAYER1);
     };
 
-    var getExit = function () {
+    var getExits = function () {
         return findAll(Element.EXIT, LAYER1);
     };
 
@@ -241,7 +530,7 @@ var Board = function (boardString) {
             layersString[LAYER2].indexOf(Element.ROBOT_FALLING.char) == -1;
     };
 
-    var barriers = null; // TODO еще разочек подумать над этим методом
+    var barriers = null;
     var barriersMap = null;
     var getBarriers = function () {
         if (!!barriers) {
@@ -450,7 +739,7 @@ var Board = function (boardString) {
         return result;
     };
 
-    var getHero = function() {
+    var getMe = function() {
         return pt(heroPosition.x, heroPosition.y);
     }
 
@@ -469,24 +758,83 @@ var Board = function (boardString) {
         }
     }
 
+    var setCharAt = function(str, index, replacement) {
+        return str.substr(0, index) + replacement + str.substr(index + replacement.length);
+    }
+
+    var maskOverlay = function(source, mask) {
+        var result = source;
+        for (var i = 0; i < result.length; ++i) {
+            var el = Element.getElement(mask[i]);
+            if (Element.isWall(el)) {
+                setCharAt(result, i, el.char);
+            }
+        }
+
+        return result.toString();
+    }
+
     var toString = function () {
-        return "Board layer 1:\n" +
-            boardAsString(LAYER1) + "\n" +
-            "Board layer 2:\n" +
-            boardAsString(LAYER2) + "\n" +
-            "Board layer 3:\n" +
-            boardAsString(LAYER3) + "\n" +
-            "Robot at: " + getHero() + "\n" +
-            "Other robots at: " + printArray(getOtherHeroes()) + "\n" +
-            "LaserMachine at: " + printArray(getLaserMachines()) + "\n" +
-            "Laser at: " + printArray(getLasers()) + "";
+        var temp = '0123456789012345678901234567890';
+
+        var result = '';
+
+        var layer1 = boardAsString(LAYER1).split('\n');
+        var layer2 = boardAsString(LAYER2).split('\n');
+        var layer3 = boardAsString(LAYER3).split('\n');
+
+        var numbers = temp.substring(0, layer1.length);
+        var space = ''.padStart(layer1.length - 5);
+        var numbersLine = numbers + '   ' + numbers + '   ' + numbers;
+        var firstPart = ' Layer1 ' + space + ' Layer2' + space + ' Layer3' + '\n  ' + numbersLine;
+
+        for (var i = 0; i < layer1.length; ++i) {
+            var ii = size - 1 - i;
+            var index = (ii < 10 ? ' ' : '') + ii;
+            result += index + layer1[i] +
+                    ' ' + index + maskOverlay(layer2[i], layer1[i]) +
+                    ' ' + index + maskOverlay(layer3[i], layer1[i]);
+
+            switch (i) {
+                case 0:
+                    result += ' Robots: ' + getMe() + ',' + printArray(getOtherHeroes());
+                    break;
+                case 1:
+                    result += ' Gold: ' + printArray(getGold());
+                    break;
+                case 2:
+                    result += ' Starts: ' + printArray(getStarts());
+                    break;
+                case 3:
+                    result += ' Exits: ' + printArray(getExits());
+                    break;
+                case 4:
+                    result += ' Boxes: ' + printArray(getBoxes());
+                    break;
+                case 5:
+                    result += ' Holes: ' + printArray(getHoles());
+                    break;
+                case 6:
+                    result += ' LaserMachine: ' + printArray(getLaserMachines());
+                    break;
+                case 7:
+                    result += ' Lasers: ' + printArray(getLasers());
+                    break;
+            }
+
+            if (i != layer1.length - 1) {
+                result += '\n';
+            }
+        }
+
+        return firstPart + '\n' + result + '\n  ' + numbersLine;
     };
 
     return {
         size: function () {
             return size;
         },
-        getHero: getHero,
+        getMe: getMe,
         isLevelFinished: function() {
             return levelFinished;
         },
@@ -496,9 +844,9 @@ var Board = function (boardString) {
         getWalls: getWalls,
         getBoxes: getBoxes,
         getGold: getGold,
-        getStart: getStart,
+        getStarts: getStarts,
         getZombieStart: getZombieStart,
-        getExit: getExit,
+        getExits: getExits,
         getHoles: getHoles,
         isMyRobotAlive: isMyRobotAlive,
         isAt: isAt,
@@ -530,3 +878,83 @@ var Board = function (boardString) {
 var random = function (n) {
     return Math.floor(Math.random() * n);
 };
+
+var Command = {
+
+    /**
+     * Says to Hero do nothing
+     */
+    doNothing : function() {
+        return Direction.STOP.toString();
+    }
+
+    /**
+     * Reset current level
+     */
+    die : function() {
+        return Direction.DIE.toString();
+    }
+
+    /**
+     * Says to Hero jump to direction
+     */
+    jump : function(direction) {
+        return Direction.JUMP.toString() + "," + direction.toString());
+    }
+
+    /**
+     * Says to Hero pull box on this direction
+     */
+    pull : function(direction) {
+        return Direction.PULL.toString() + "," + direction.toString());
+    }
+
+    /**
+     * Says to Hero fire on this direction
+     */
+    fire : function(direction) {
+        return Direction.FIRE.toString() + "," + direction.toString());
+    }
+
+    /**
+     * Says to Hero jump in place
+     */
+    jump : function() {
+        return Direction.JUMP.toString();
+    }
+
+    /**
+     * Says to Hero go to direction
+     */
+    go : function(direction) {
+        return Direction.valueOf(direction).toString();
+    }
+
+    /**
+     * Says to Hero goes to start point
+     */
+    reset : function() {
+        return Direction.DIE.toString();
+    }
+
+}
+
+
+var direction;
+
+var DirectionSolver = function(board){
+
+    return {
+        /**
+         * @return next hero action
+         */
+        get : function() {
+            var hero = board.getMe();
+
+            // TODO your code here
+
+            return Command.go(Direction.RIGHT);
+        }
+    };
+};
+
