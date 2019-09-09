@@ -28,7 +28,7 @@ License along with this program.  If not, see
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Codenjoy | Sign Up</title>
+    <title>FS Proffesionals Week | Sign Up</title>
     <link href="${ctx}/resources/css/bootstrap/bootstrap.min.css" rel="stylesheet"/>
     <link href="${ctx}/resources/fonts/font-awesome-4.6.3/css/font-awesome.min.css" rel="stylesheet"/>
     <link href="${ctx}/resources/css/registration-style.css" rel="stylesheet"/>
@@ -48,7 +48,7 @@ License along with this program.  If not, see
                     <span class="icon-bar"></span>
                 </button>
                 <a class="logo inline" href="#" title="Home"><img src="${ctx}/resources/img/logo.png"></a>
-                <span class="title dojo-title">Coding DOJO&nbsp;&nbsp;&nbsp;&nbsp;</span>
+                <span class="title dojo-title">FS Proffesionals Week&nbsp;&nbsp;&nbsp;&nbsp;</span>
                 <c:if test="${activeProfiles.contains('icancode')}">
                     <!-- TODO to remove from here -->
                     <a class="logo inline" href="#" title="Home"><img src="${ctx}/resources/img/i_can_code_Logo.png"></a>

@@ -28,7 +28,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Game boards</title>
+    <title>FS Proffesionals Week | Game boards</title>
 
     <link href="${ctx}/resources/css/all.css" rel="stylesheet">
     <link href="${ctx}/resources/css/custom.css" rel="stylesheet">

@@ -62,7 +62,7 @@ if (gameName == 'JavaScript') {
     game.enableBefunge = true;
     game.sprites = 'robot';
 } else { // if (gameName == 'iCanCode Contest') { by default
-    gameName = 'Java';
+    gameName = 'Contest';
     game.enableBefunge = false;
     game.sprites = 'robot';
     game.onlyLeaderBoard = true;
