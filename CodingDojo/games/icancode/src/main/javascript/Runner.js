@@ -20,6 +20,9 @@
  * #L%
  */
 
+// you can get this code after registration on the server with your email
+var url = "http://codenjoy.com/codenjoy-contest/board/player/5q0uczbju6no468bg6w0?code=1725193577353578184&gameName=icancode";
+
 var util = require('util');
 var WSocket = require('ws');
 
@@ -36,7 +39,7 @@ var printArray = function (array) {
        var element = array[index];
        result.push(element.toString());
    }
-   return "[" + result + "]";
+   return result;
 };
 
 var processBoard = function(boardString) {
@@ -47,17 +50,14 @@ var processBoard = function(boardString) {
     }
 
     var logMessage = board + "\n\n";
-    var answer = new DirectionSolver(board).get().toString();
+    var answer = new YourSolver(board).whatToDo().toString();
     logMessage += "Answer: " + answer + "\n";
-    logMessage += "-----------------------------------\n";
+    logMessage += "---------------------------------------------------------------------------------------------------------\n";
     
     log(logMessage);
 
     return answer;
 };
-
-// you can get this code after registration on the server with your email
-var url = "http://codenjoy.com/codenjoy-contest/board/player/5q0uczbju6no468bg6w0?code=1725193577353578184&gameName=icancode";
 
 url = url.replace("http", "ws");
 url = url.replace("board/player/", "ws?user=");
@@ -119,6 +119,10 @@ var el = function(char, type, direction) {
 
 var D = function(index, dx, dy, name){
 
+    var change = function(pt) {
+        return pt(changeX(pt.getX()), changeY(pt.getY()));
+    };
+
     var changeX = function(x) {
         return x + dx;
     };
@@ -133,6 +137,16 @@ var D = function(index, dx, dy, name){
             case Direction.DOWN : return Direction.UP;
             case Direction.LEFT : return Direction.RIGHT;
             case Direction.RIGHT : return Direction.LEFT;
+            default : return Direction.STOP;
+        }
+    };
+
+    var clockwise = function() {
+        switch (this) {
+            case Direction.LEFT : return Direction.UP;
+            case Direction.UP : return Direction.RIGHT;
+            case Direction.RIGHT : return Direction.DOWN;
+            case Direction.DOWN : return Direction.LEFT;
             default : return Direction.STOP;
         }
     };
@@ -172,11 +186,11 @@ Direction.values = function() {
    return [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT, Direction.JUMP, Direction.PULL, Direction.FIRE, Direction.DIE, Direction.STOP];
 };
 
-Direction.valueOf = function(index) {
+Direction.valueOf = function(indexOrName) {
     var directions = Direction.values();
     for (var i in directions) {
         var direction = directions[i];
-        if (direction.getIndex() == index) {
+        if (direction.getIndex() == indexOrName || direction.toString() == indexOrName) {
              return direction;
         }
     }
@@ -362,27 +376,29 @@ var Board = function (board) {
         layers.push(parseLayer(layersString[index]));
     }
 
-    var isAt = function (x, y, layer, element) {
-        if (pt(x, y).isBad(size) || getAt(x, y, layer) == null) {
+    // TODO to add List<Elements> getNear(int numLayer, int x, int y) method
+
+    var isAt = function (layer, x, y, elements) {
+        if (!Array.isArray(elements)) {
+            var arr = [];
+            arr.push(elements);
+            elements = arr;
+        }
+
+        if (pt(x, y).isBad(size) || getAt(layer, x, y) == null) {
             return false;
         }
-        return getAt(x, y, layer).char == element.char;
-    };
 
-    var getAt = function (x, y, layer) {
-        return layers[layer][x][y];
-    };
-
-    var findAll = function (element, layer) {
-        var result = [];
-        for (var x = 0; x < size; x++) {
-            for (var y = 0; y < size; y++) {
-                if (isAt(x, y, layer, element)) {
-                    result.push(new Point(x, y));
-                }
-            }
+        var found = false;
+        for (var e in elements) {
+            var element = elements[e];
+            found |= (getAt(layer, x, y).char == element.char);
         }
-        return result;
+        return found;
+    };
+
+    var getAt = function (layer, x, y) {
+        return layers[layer][x][y];
     };
 
     var removeAllElements = function(array, element) {
@@ -400,9 +416,9 @@ var Board = function (board) {
             result.push(arr);
             for (var y = 0; y < size; y++) {
                 var cell = [];
-                cell.push(getAt(x, y, LAYER1).type);
-                cell.push(getAt(x, y, LAYER2).type);
-                cell.push(getAt(x, y, LAYER3).type);
+                cell.push(getAt(LAYER1, x, y).type);
+                cell.push(getAt(LAYER2, x, y).type);
+                cell.push(getAt(LAYER3, x, y).type);
                 removeAllElements(cell, 'NONE');
                 if (cell.length == 0) {
                     cell.push('NONE');
@@ -414,14 +430,19 @@ var Board = function (board) {
         return result;
     }
 
-    var findAllElements = function (elements, layer) {
+    var get = function (layer, elements) {
+        if (!Array.isArray(elements)) {
+            var arr = [];
+            arr.push(elements);
+            elements = arr;
+        }
         var result = [];
         for (var x = 0; x < size; x++) {
             for (var y = 0; y < size; y++) {
                 for (var e in elements) {
                     var element = elements[e];
-                    if (isAt(x, y, layer, element)) {
-                        result.push(element.direction ? new Point(x, y, element.direction.name()) : new Point(x, y));
+                    if (isAt(layer, x, y, element)) {
+                        result.push(element.direction ? new Point(x, y, element.direction.toString()) : new Point(x, y));
                     }
                 }
             }
@@ -432,19 +453,19 @@ var Board = function (board) {
     var isAnyOfAt = function (x, y, layer, elements) {
         for (var index in elements) {
             var element = elements[index];
-            if (isAt(x, y, layer, element)) {
+            if (isAt(layer, x, y, element)) {
                 return true;
             }
         }
         return false;
     };
 
-    var isNear = function (x, y, layer, element) {
+    var isNear = function (layer, x, y, element) {
         if (pt(x, y).isBad(size)) {
             return false;
         }
-        return isAt(x + 1, y, layer, element) || isAt(x - 1, y, layer, element)
-            || isAt(x, y + 1, layer, element) || isAt(x, y - 1, layer, element);
+        return isAt(layer, x + 1, y, element) || isAt(layer, x - 1, y, element)
+            || isAt(layer, x, y + 1, element) || isAt(layer, x, y - 1, element);
     };
 
     var isBarrierAt = function (x, y) {
@@ -455,25 +476,25 @@ var Board = function (board) {
     };
 
     var isWallAt = function (x, y) {
-        return getAt(x, y, LAYER1).type == 'WALL';
+        return getAt(LAYER1, x, y).type == 'WALL';
     };
 
-    var countNear = function (x, y, layer, element) {
+    var countNear = function (layer, x, y, element) {
         if (pt(x, y).isBad(size)) {
             return 0;
         }
         var count = 0;
-        if (isAt(x - 1, y, layer, element)) count++;
-        if (isAt(x + 1, y, layer, element)) count++;
-        if (isAt(x, y - 1, layer, element)) count++;
-        if (isAt(x, y + 1, layer, element)) count++;
+        if (isAt(layer, x + 1, y, element)) count++;
+        if (isAt(layer, x - 1, y, element)) count++;
+        if (isAt(layer, x, y - 1, element)) count++;
+        if (isAt(layer, x, y + 1, element)) count++;
         return count;
     };
 
     var getOtherHeroes = function () {
         var elements = [Element.ROBOT_OTHER, Element.ROBOT_OTHER_FALLING, Element.ROBOT_OTHER_LASER];
-        return findAllElements(elements, LAYER2)
-            .concat(findAll(Element.ROBOT_OTHER_FLYING, LAYER3));
+        return get(LAYER2, elements)
+            .concat(get(LAYER3, Element.ROBOT_OTHER_FLYING));
     };
 
     var getLaserMachines = function () {
@@ -481,13 +502,13 @@ var Board = function (board) {
             Element.LASER_MACHINE_CHARGING_UP, Element.LASER_MACHINE_CHARGING_DOWN,
             Element.LASER_MACHINE_READY_LEFT, Element.LASER_MACHINE_READY_RIGHT,
             Element.LASER_MACHINE_READY_UP, Element.LASER_MACHINE_READY_DOWN];
-        return findAllElements(elements, LAYER1);
+        return get(LAYER1, elements);
     };
 
     var getLasers = function () {
         var elements = [Element.LASER_LEFT, Element.LASER_RIGHT,
             Element.LASER_UP, Element.LASER_DOWN];
-        return findAllElements(elements, LAYER2);
+        return get(LAYER2, elements);
     };
 
     var getWalls = function () {
@@ -498,34 +519,40 @@ var Board = function (board) {
             Element.WALL_BACK_ANGLE_LEFT, Element.WALL_BACK_ANGLE_RIGHT,
             Element.ANGLE_OUT_RIGHT, Element.ANGLE_OUT_LEFT,
             Element.SPACE];
-        return findAllElements(elements, LAYER1);
+        return get(LAYER1, elements);
     };
 
     var getBoxes = function () {
-        return findAll(Element.BOX, LAYER2);
+        return get(LAYER2, Element.BOX);
     };
 
     var getStarts = function () {
-        return findAll(Element.START, LAYER1);
+        return get(LAYER1, Element.START);
     };
 
     var getZombieStart = function () {
-        return findAll(Element.ZOMBIE_START, LAYER1);
+        return get(LAYER1, Element.ZOMBIE_START);
     };
 
     var getExits = function () {
-        return findAll(Element.EXIT, LAYER1);
+        return get(LAYER1, Element.EXIT);
     };
 
     var getGold = function () {
-        return findAll(Element.GOLD, LAYER1);
+        return get(LAYER1, Element.GOLD);
+    };
+
+    var getZombies = function () {
+        var elements = [Element.FEMALE_ZOMBIE, Element.MALE_ZOMBIE,
+                    Element.ZOMBIE_DIE];
+        return get(LAYER2, elements);
     };
 
     var getHoles = function () {
-        return findAll(Element.HOLE, LAYER1);
+        return get(LAYER1, Element.HOLE);
     };
 
-    var isMyRobotAlive = function () {
+    var isMeAlive = function () {
         return layersString[LAYER2].indexOf(Element.ROBOT_LASER.char) == -1 &&
             layersString[LAYER2].indexOf(Element.ROBOT_FALLING.char) == -1;
     };
@@ -542,8 +569,8 @@ var Board = function (board) {
         for (var x = 0; x < size; x++) {
             barriersMap[x] = new Array(size);
             for (var y = 0; y < size; y++) {
-                var element1 = getAt(x, y, LAYER1);
-                var element2 = getAt(x, y, LAYER2);
+                var element1 = getAt(LAYER1, x, y);
+                var element2 = getAt(LAYER2, x, y);
 
                 barriersMap[x][y] = (
                     element1.type == 'WALL' ||
@@ -569,165 +596,6 @@ var Board = function (board) {
 
     var isBarrier = function(x, y) {
         return getFromArray(x, y, barriersMap, true);
-    }
-    
-    var getShortestWay = function (from, to) {
-        if (from.getX() == to.getX() && from.getY() == to.getY()) {
-            return [from];
-        }
-        if (!barriersMap) {
-            getBarriers();
-        }
-
-        var mask = Array(size);
-        for (var x = 0; x < size; x++) {
-            mask[x] = new Array(size);
-            for (var y = 0; y < size; y++) {
-                mask[x][y] = (isWallAt(x, y)) ? -1 : 0;
-            }
-        }
-
-        var getMask = function(x, y) {
-            return getFromArray(x, y, mask, -1);
-        }
-
-        var current = 1;
-        mask[from.getX()][from.getY()] = current;
-
-        var isOutOf = function (x, y) {
-            return (x < 0 || y < 0 || x >= size || y >= size);
-        }
-
-        var comeRound = function (x, y, onElement) {
-            var dd = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-            for (var i in dd) {
-                var dx = dd[i][0];
-                var dy = dd[i][1];
-
-                var xx = x + dx;
-                var yy = y + dy;
-                if (isOutOf(xx, yy)) continue;
-
-                var stop = !onElement(xx, yy);
-
-                if (stop) return;
-            }
-        }
-
-        var done = false;
-        while (!done) {
-            var maskToString = function() {
-                var string = '01234567890123456789\n';
-                for (var y = 0; y < size; y++) {
-                    for (var x = 0; x < size; x++) {
-                        if (mask[x][y] == -1) {
-                            var s = '*';
-                        } else if (mask[x][y] == 0) {
-                            if (getAt(x, y, LAYER1) == Element.HOLE) {
-                                var s = 'O';
-                            } else if (getAt(x, y, LAYER2) == Element.BOX) {
-                                var s = 'B';
-                            } else if (getAt(x, y, LAYER1) == Element.EXIT) {
-                                var s = 'E';
-                            } else {
-                                var s = ' ';
-                            }
-                        } else {
-                            var s = '' + mask[x][y];
-                        }
-                        if (s.length == 2) s = s[1];
-                        string += s;
-                    }
-                    string += ' ' + y + '\n';
-                }
-                string += '01234567890123456789\n';
-                console.log(string);
-            }
-            // s = 8;
-            // if (s == -1 || current >= s - 1 && current <= s) maskToString();
-
-            for (var x = 0; x < size; x++) {
-                for (var y = 0; y < size; y++) {
-                    if (mask[x][y] != current) continue;
-
-                    comeRound(x, y, function (xx, yy) {
-                        if (getMask(xx, yy) == 0) {
-                            var dx = xx - x;
-                            var dy = yy - y;
-
-                            var px = x - dx;
-                            var py = y - dy;
-
-                            var fx = xx + dx;
-                            var fy = yy + dy;
-
-                            // путь px/py -> x/y -> xx/yy -> fx/fy
-
-                            var can = true;
-                            if (isBarrier(xx, yy) && isBarrier(fx, fy)) {
-                                can = false;
-                            }
-                            if (isBarrier(x, y)) {
-                                if (getMask(px, py) == -1) {
-                                    can = false;
-                                }
-                                if (isBarrier(xx, yy)) {
-                                    can = false;
-                                }
-                            }
-                            // if (s == -1 || current >= s - 1 && current < s) {
-                            //     console.log('px/py: ' + px + ' ' + py);
-                            //     console.log('x/y: ' + x + ' ' + y);
-                            //     console.log('xx/yy: ' + xx + ' ' + yy);
-                            //     console.log('fx/fy: ' + fx + ' ' + fy);
-                            //     console.log('mask[px][py]: ' + mask[px][py]);
-                            //     console.log('isBarrier(px, py): ' + isBarrier(px, py));
-                            //     console.log('isBarrier(x, y): ' + isBarrier(x, y));
-                            //     console.log('isBarrier(xx, yy): ' + isBarrier(xx, yy));
-                            //     console.log('isBarrier(fx, fy): ' + isBarrier(fx, fy));
-                            //     console.log(((can) ? '+' : '-') + (current + 1) + ": [" + x + ":" + y + "] -> [" + xx + ":" + yy + "]");
-                            // }
-
-                            if (can) {
-                                mask[xx][yy] = current + 1;
-                                if (xx == to.getX() && yy == to.getY()) {
-                                    done = true;
-                                }
-                            }
-                        }
-                        return true;
-                    });
-                }
-            }
-
-            current++;
-            if (current > 200) {
-                return [];
-            }
-        }
-        var point = to;
-        done = false;
-        current = mask[point.getX()][point.getY()];
-        var path = [];
-        path.push(point);
-        while (!done) {
-            comeRound(point.getX(), point.getY(), function (xx, yy) {
-                if (mask[xx][yy] == current - 1) {
-                    point = pt(xx, yy);
-                    current--;
-
-                    path.push(point);
-
-                    if (current == 1) {
-                        done = true;
-                    }
-                    return false;
-                }
-                return true;
-            });
-        }
-
-        return path.reverse();
     }
 
     var boardAsString = function (layer) {
@@ -767,7 +635,7 @@ var Board = function (board) {
         for (var i = 0; i < result.length; ++i) {
             var el = Element.getElement(mask[i]);
             if (Element.isWall(el)) {
-                setCharAt(result, i, el.char);
+                result = setCharAt(result, i, el.char);
             }
         }
 
@@ -779,9 +647,9 @@ var Board = function (board) {
 
         var result = '';
 
-        var layer1 = boardAsString(LAYER1).split('\n');
-        var layer2 = boardAsString(LAYER2).split('\n');
-        var layer3 = boardAsString(LAYER3).split('\n');
+        var layer1 = boardAsString(LAYER1).split('\n').slice(0, -1);
+        var layer2 = boardAsString(LAYER2).split('\n').slice(0, -1);
+        var layer3 = boardAsString(LAYER3).split('\n').slice(0, -1);
 
         var numbers = temp.substring(0, layer1.length);
         var space = ''.padStart(layer1.length - 5);
@@ -820,6 +688,9 @@ var Board = function (board) {
                 case 7:
                     result += ' Lasers: ' + printArray(getLasers());
                     break;
+                case 8:
+                    result += ' Zombies: ' + printArray(getZombies());
+                    break;
             }
 
             if (i != layer1.length - 1) {
@@ -834,23 +705,25 @@ var Board = function (board) {
         size: function () {
             return size;
         },
-        getMe: getMe,
+        getMe: getMe, 
         isLevelFinished: function() {
             return levelFinished;
         },
-        getOtherHeroes: getOtherHeroes,
+        getOtherHeroes: getOtherHeroes, 
         getLaserMachines: getLaserMachines,
         getLasers: getLasers,
         getWalls: getWalls,
         getBoxes: getBoxes,
         getGold: getGold,
         getStarts: getStarts,
+        getZombies: getZombies,
         getZombieStart: getZombieStart,
         getExits: getExits,
         getHoles: getHoles,
-        isMyRobotAlive: isMyRobotAlive,
-        isAt: isAt,
-        getAt: getAt,
+        isMeAlive: isMeAlive, 
+        isAt: isAt, 
+        getAt: getAt, 
+        get: get, 
         toString: toString,
         layer1: function () {
             return boardAsString(LAYER1)
@@ -862,13 +735,11 @@ var Board = function (board) {
             return boardAsString(LAYER3)
         },
         getWholeBoard: getWholeBoard,
-        getBarriers: getBarriers,
-        findAll: findAll,
+        getBarriers: getBarriers,        
         isAnyOfAt: isAnyOfAt,
-        isNear: isNear,
-        isBarrierAt: isBarrierAt,
-        countNear: countNear,
-        getShortestWay: getShortestWay,
+        isNear: isNear, 
+        isBarrierAt: isBarrierAt, 
+        countNear: countNear, 
         getScannerOffset: function () {
             return pt(scannerOffset.x, scannerOffset.y);
         }
@@ -886,49 +757,49 @@ var Command = {
      */
     doNothing : function() {
         return Direction.STOP.toString();
-    }
+    },
 
     /**
      * Reset current level
      */
     die : function() {
         return Direction.DIE.toString();
-    }
+    },
 
     /**
      * Says to Hero jump to direction
      */
     jump : function(direction) {
-        return Direction.JUMP.toString() + "," + direction.toString());
-    }
+        return Direction.JUMP.toString() + "," + direction.toString();
+    },
 
     /**
      * Says to Hero pull box on this direction
      */
     pull : function(direction) {
-        return Direction.PULL.toString() + "," + direction.toString());
-    }
+        return Direction.PULL.toString() + "," + direction.toString();
+    },
 
     /**
      * Says to Hero fire on this direction
      */
     fire : function(direction) {
-        return Direction.FIRE.toString() + "," + direction.toString());
-    }
+        return Direction.FIRE.toString() + "," + direction.toString();
+    },
 
     /**
      * Says to Hero jump in place
      */
     jump : function() {
         return Direction.JUMP.toString();
-    }
+    },
 
     /**
      * Says to Hero go to direction
      */
     go : function(direction) {
-        return Direction.valueOf(direction).toString();
-    }
+        return Direction.valueOf(direction.toString()).toString();
+    },
 
     /**
      * Says to Hero goes to start point
@@ -939,16 +810,15 @@ var Command = {
 
 }
 
-
 var direction;
 
-var DirectionSolver = function(board){
+var YourSolver = function(board){
 
     return {
         /**
-         * @return next hero action
+         * @return next robot action
          */
-        get : function() {
+        whatToDo : function() {
             var hero = board.getMe();
 
             // TODO your code here
