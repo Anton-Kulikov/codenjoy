@@ -32,8 +32,7 @@ function defaultRegistrationSettings() {
         showData4: true,
         defaultGame: null,
         gameTypes: {
-            icancode: ['Contest']
-        }
+            icancode: ['Contest']        }
     };
 }
 
