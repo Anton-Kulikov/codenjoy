@@ -61,7 +61,9 @@ if (gameName == 'JavaScript') {
 } else if (gameName == 'Befunge') {
     game.enableBefunge = true;
     game.sprites = 'robot';
-    gameName = 'Contest';    game.enableBefunge = false;
+} else {
+    gameName = 'Contest';
+    game.enableBefunge = false;
     game.sprites = 'robot';
     game.onlyLeaderBoard = true;
 }
